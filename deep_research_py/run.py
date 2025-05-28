@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
+import os
 
 from deep_research_py.deep_research import deep_research, write_final_report
 from deep_research_py.feedback import generate_feedback
@@ -45,14 +46,15 @@ async def main(
         )
     )
 
-    service = EnvironmentConfig.get_default_provider()
+    # Get model from environment or use default
+    model = os.getenv("DEFAULT_MODEL", "gemini-pro")
+    
+    # Get service from environment or use default
+    service = os.getenv("DEFAULT_SERVICE", "gemini")
 
     console.print(f"🛠️ Using [bold green]{service.upper()}[/bold green] service.")
 
     client = AIClientFactory.get_client()
-
-    # Get the model for the current provider
-    model = AIClientFactory.get_model()
 
     # Get initial inputs with clear formatting
     query = await async_prompt("\n🔍 What would you like to research? ")
@@ -97,7 +99,7 @@ async def main(
             "[yellow]Researching your topic...[/yellow]", total=None
         )
         research_results = await deep_research(
-            query=combined_query,
+            prompt=combined_query,
             breadth=breadth,
             depth=depth,
             concurrency=concurrency,
@@ -125,7 +127,7 @@ async def main(
         # Show results
         console.print("\n[bold green]Research Complete![/bold green]")
         console.print("\n[yellow]Final Report:[/yellow]")
-        console.print(Panel(report, title="Research Report"))
+        console.print(Panel(report, title="Research Report", expand=False))
 
         # Show sources
         console.print("\n[yellow]Sources:[/yellow]")
@@ -133,9 +135,9 @@ async def main(
             rprint(f"• {url}")
 
         # Save report
-        with open("output.md", "w") as f:
+        with open("output.txt", "w") as f:
             f.write(report)
-        console.print("\n[dim]Report has been saved to output.md[/dim]")
+        console.print("\n[dim]Report has been saved to output.txt[/dim]")
 
 
 def run():

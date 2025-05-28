@@ -1,0 +1,87 @@
+@startuml Deep Research System Architecture
+
+!define RECTANGLE class
+
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+skinparam handwritten false
+
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor black
+    FontColor black
+}
+
+' Main Components
+package "Deep Research System" {
+    [User Interface] as UI
+    [Research Orchestrator] as RO
+    [AI Service Layer] as AI
+    [Data Acquisition Layer] as DAL
+    [Storage Layer] as SL
+}
+
+' AI Service Layer Components
+package "AI Service Layer" {
+    [LLM Provider Factory] as LPF
+    [Text Processing] as TP
+    [Prompt Management] as PM
+}
+
+' Data Acquisition Components
+package "Data Acquisition Layer" {
+    [Search Engine] as SE
+    [Web Scraper] as WS
+    [Content Processor] as CP
+}
+
+' Storage Components
+package "Storage Layer" {
+    [Research Results] as RR
+    [Scraped Content] as SC
+}
+
+' Relationships
+UI --> RO : "User Queries"
+RO --> AI : "Process Research"
+RO --> DAL : "Fetch Data"
+DAL --> SL : "Store Results"
+AI --> LPF : "Get LLM Client"
+AI --> TP : "Process Text"
+AI --> PM : "Get Prompts"
+DAL --> SE : "Search"
+DAL --> WS : "Scrape"
+DAL --> CP : "Process Content"
+
+' Component Details
+note right of UI
+  - CLI Interface
+  - Web Interface
+  - State Management
+end note
+
+note right of RO
+  - Research Flow Control
+  - Question Generation
+  - Result Aggregation
+end note
+
+note right of AI
+  - Multiple LLM Support
+  - Context Management
+  - Response Processing
+end note
+
+note right of DAL
+  - DuckDuckGo Search
+  - Playwright Scraping
+  - Content Extraction
+end note
+
+note right of SL
+  - JSON Storage
+  - Research History
+  - Content Cache
+end note
+
+@enduml 

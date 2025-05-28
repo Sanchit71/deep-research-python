@@ -1,9 +1,10 @@
 import os
 import typer
 import json
+import httpx
 from openai import AsyncOpenAI
 import tiktoken
-from typing import Optional
+from typing import Optional, List, Dict
 from rich.console import Console
 from dotenv import load_dotenv
 from .text_splitter import RecursiveCharacterTextSplitter
@@ -56,17 +57,78 @@ class AIClientFactory:
 
 
 async def get_client_response(
-    client: AsyncOpenAI, model: str, messages: list, response_format: dict
-):
-    response = await client.beta.chat.completions.parse(
-        model=model,
-        messages=messages,
-        response_format=response_format,
-    )
+    client: AsyncOpenAI,
+    model: str,
+    messages: List[Dict[str, str]],
+    response_format: Optional[Dict[str, str]] = None,
+) -> str:
+    """Get response from AI client."""
+    try:
+        if model.startswith("gemini"):
+            # Special handling for Gemini API
+            base_url = "https://generativelanguage.googleapis.com/v1beta"
+            url = f"{base_url}/models/{model}:generateContent"
+            
+            # Get API key from environment
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise Exception("No Gemini API key provided!")
 
-    result = response.choices[0].message.content
+            # Prepare the request
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key
+            }
 
-    return json.loads(result)
+            # Convert messages to Gemini format
+            contents = []
+            for msg in messages:
+                contents.append({
+                    "parts": [{"text": msg["content"]}],
+                    "role": msg["role"]
+                })
+
+            # Make the request
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.post(
+                    url,
+                    headers=headers,
+                    json={"contents": contents},
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                # Extract the text content from the response
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    content = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return content
+                else:
+                    raise Exception("No response content found in Gemini API response")
+
+        else:
+            # Handle other models (e.g., OpenAI)
+            response = await client.beta.chat.completions.parse(
+                model=model,
+                messages=messages,
+                response_format=response_format,
+            )
+            return response.choices[0].message.content
+
+    except httpx.HTTPError as e:
+        if e.response.status_code == 429:
+            raise Exception("Rate limit exceeded. Please try again later.")
+        elif e.response.status_code == 400:
+            raise Exception("Invalid request to AI API. Please check your parameters.")
+        elif e.response.status_code == 401:
+            raise Exception("Authentication failed. Please check your API key.")
+        elif e.response.status_code == 403:
+            raise Exception("Access forbidden. Please check your API key permissions.")
+        else:
+            raise Exception(f"Failed to connect to AI API: {str(e)}")
+    except Exception as e:
+        print(f"Unexpected error while calling AI API: {str(e)}")
+        raise Exception(f"Error calling AI API: {str(e)}")
 
 
 MIN_CHUNK_SIZE = 140

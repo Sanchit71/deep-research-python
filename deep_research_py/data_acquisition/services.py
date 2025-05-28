@@ -3,16 +3,21 @@ from typing import Dict, Optional, Any, List, TypedDict
 import os
 import json
 import asyncio
+import httpx
+from dotenv import load_dotenv
 from deep_research_py.utils import logger
 from firecrawl import FirecrawlApp
 from .manager import SearchAndScrapeManager
 
+# Load environment variables
+load_dotenv()
 
 class SearchServiceType(Enum):
     """Supported search service types."""
 
     FIRECRAWL = "firecrawl"
     PLAYWRIGHT_DDGS = "playwright_ddgs"
+    SERPER = "serper"
 
 
 class SearchResponse(TypedDict):
@@ -26,24 +31,39 @@ class SearchService:
         """Initialize the appropriate search service.
 
         Args:
-            service_type: The type of search service to use. Defaults to env var or playwright_ddgs.
+            service_type: The type of search service to use. Defaults to env var or serper.
         """
         # Determine which service to use
         if service_type is None:
-            service_type = os.environ.get("DEFAULT_SCRAPER", "playwright_ddgs")
-
+            service_type = os.environ.get("DEFAULT_SCRAPER", "serper")
+        
+        logger.info(f"Initializing search service with type: {service_type}")
         self.service_type = service_type
 
         # Initialize the appropriate service
         if service_type == SearchServiceType.FIRECRAWL.value:
+            logger.info("Using Firecrawl search service")
             self.firecrawl = Firecrawl(
                 api_key=os.environ.get("FIRECRAWL_API_KEY", ""),
                 api_url=os.environ.get("FIRECRAWL_BASE_URL"),
             )
             self.manager = None
-        else:
+            self.serper = None
+        elif service_type == SearchServiceType.SERPER.value:
+            logger.info("Using Serper search service")
             self.firecrawl = None
-            self.manager = SearchAndScrapeManager()
+            self.manager = None
+            self.serper = Serper(
+                api_key=os.environ.get("SERPER_API_KEY", "")
+            )
+        else:
+            logger.info(f"Unknown service type {service_type}, defaulting to Serper")
+            self.firecrawl = None
+            self.manager = None
+            self.serper = Serper(
+                api_key=os.environ.get("SERPER_API_KEY", "")
+            )
+            self.service_type = SearchServiceType.SERPER.value
             # Initialize resources asynchronously later
             self._initialized = False
 
@@ -71,7 +91,9 @@ class SearchService:
         try:
             if self.service_type == SearchServiceType.FIRECRAWL.value:
                 response = await self.firecrawl.search(query, limit=limit, **kwargs)
-            else:
+            elif self.service_type == SearchServiceType.SERPER.value:
+                response = await self.serper.search(query, limit=limit, **kwargs)
+            elif self.service_type == SearchServiceType.PLAYWRIGHT_DDGS.value:
                 scraped_data = await self.manager.search_and_scrape(
                     query, num_results=limit, scrape_all=True, **kwargs
                 )
@@ -93,6 +115,9 @@ class SearchService:
                     formatted_data.append(item)
 
                 response = {"data": formatted_data}
+            else:
+                # Default to Serper if service type is unknown
+                response = await self.serper.search(query, limit=limit, **kwargs)
 
             if save_content:
                 # Create the directory if it doesn't exist
@@ -117,6 +142,82 @@ class SearchService:
 
         except Exception as e:
             logger.error(f"Error during search: {str(e)}")
+            return {"data": []}
+
+
+class Serper:
+    """Simple wrapper for Serper.dev API."""
+
+    def __init__(self, api_key: str = ""):
+        # Try to get API key from environment if not provided
+        if not api_key:
+            api_key = os.getenv("SERPER_API_KEY")
+            
+        if not api_key:
+            logger.error("No Serper API key provided!")
+            raise ValueError("Serper API key is required")
+            
+        self.api_key = api_key
+        self.base_url = "https://google.serper.dev/search"
+        logger.info(f"Initialized Serper with API key: {api_key[:5]}...")
+
+    async def search(
+        self, query: str, limit: int = 5
+    ) -> SearchResponse:
+        """Search using Serper.dev API."""
+        try:
+            logger.info(f"Making Serper search request for query: {query}")
+            headers = {
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "q": query,
+                "num": limit
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.base_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=30.0
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Serper API error: {response.status_code} - {response.text}")
+                    return {"data": []}
+                
+                data = response.json()
+                logger.info(f"Received response from Serper with {len(data.get('organic', []))} results")
+
+                # Format the response to match our standard format
+                formatted_data = []
+                
+                # Process organic results
+                for result in data.get("organic", []):
+                    formatted_data.append({
+                        "url": result.get("link", ""),
+                        "title": result.get("title", ""),
+                        "content": result.get("snippet", "")
+                    })
+
+                # Process knowledge graph if available
+                if "knowledgeGraph" in data:
+                    kg = data["knowledgeGraph"]
+                    formatted_data.append({
+                        "url": kg.get("link", ""),
+                        "title": kg.get("title", ""),
+                        "content": kg.get("description", "")
+                    })
+
+                return {"data": formatted_data}
+
+        except Exception as e:
+            logger.error(f"Error searching with Serper: {e}")
+            if isinstance(e, httpx.HTTPError):
+                logger.error(f"HTTP Error details: {e.response.text if hasattr(e, 'response') else 'No response text'}")
             return {"data": []}
 
 
@@ -178,5 +279,5 @@ class Firecrawl:
 
 # Initialize a global instance with the default settings
 search_service = SearchService(
-    service_type=os.getenv("DEFAULT_SCRAPER", "playwright_ddgs")
+    service_type=os.getenv("DEFAULT_SCRAPER", "serper")
 )

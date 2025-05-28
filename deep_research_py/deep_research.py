@@ -5,7 +5,6 @@ import openai
 from deep_research_py.data_acquisition.services import search_service
 from .ai.providers import trim_prompt, get_client_response
 from .prompt import system_prompt
-import json
 
 
 class SearchResponse(TypedDict):
@@ -32,7 +31,10 @@ async def generate_serp_queries(
 ) -> List[SerpQuery]:
     """Generate SERP queries based on user input and previous learnings."""
 
-    prompt = f"""Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a JSON object with a 'queries' array field containing {num_queries} queries (or less if the original prompt is clear). Each query object should have 'query' and 'research_goal' fields. Make sure each query is unique and not similar to each other: <prompt>{query}</prompt>"""
+    prompt = f"""Given the following prompt from the user, generate {num_queries} SERP queries to research the topic. 
+    Each query should be on a new line and include a brief research goal in parentheses.
+    Make sure each query is unique and not similar to each other: 
+    <prompt>{query}</prompt>"""
 
     if learnings:
         prompt += f"\n\nHere are some learnings from previous research, use them to generate more specific queries: {' '.join(learnings)}"
@@ -44,14 +46,26 @@ async def generate_serp_queries(
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": prompt},
         ],
-        response_format={"type": "json_object"},
+        response_format={"type": "text"},
     )
 
     try:
-        queries = response.get("queries", [])
-        return [SerpQuery(**q) for q in queries][:num_queries]
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
+        # Parse the text response into queries
+        queries = []
+        for line in response.strip().split('\n'):
+            if not line.strip():
+                continue
+            # Extract query and research goal from line
+            parts = line.split('(', 1)
+            if len(parts) == 2:
+                query_text = parts[0].strip()
+                research_goal = parts[1].rstrip(')').strip()
+                queries.append(SerpQuery(query=query_text, research_goal=research_goal))
+            else:
+                queries.append(SerpQuery(query=line.strip(), research_goal="General research"))
+        return queries[:num_queries]
+    except Exception as e:
+        print(f"Error parsing queries: {e}")
         print(f"Raw response: {response}")
         return []
 
@@ -72,15 +86,16 @@ async def process_serp_result(
         if item.get("content")
     ]
 
-    # Create the contents string separately
     contents_str = "".join(f"<content>\n{content}\n</content>" for content in contents)
 
     prompt = (
         f"Given the following contents from a SERP search for the query <query>{query}</query>, "
-        f"generate a list of learnings from the contents. Return a JSON object with 'learnings' "
-        f"and 'followUpQuestions' keys with array of strings as values. Include up to {num_learnings} learnings and "
-        f"{num_follow_up_questions} follow-up questions. The learnings should be unique, "
-        "concise, and information-dense, including entities, metrics, numbers, and dates.\n\n"
+        f"generate a list of learnings and follow-up questions. "
+        f"Format your response as follows:\n\n"
+        f"LEARNINGS:\n"
+        f"- [List {num_learnings} unique, concise learnings]\n\n"
+        f"FOLLOW-UP QUESTIONS:\n"
+        f"- [List {num_follow_up_questions} follow-up questions]\n\n"
         f"<contents>{contents_str}</contents>"
     )
 
@@ -91,18 +106,35 @@ async def process_serp_result(
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": prompt},
         ],
-        response_format={"type": "json_object"},
+        response_format={"type": "text"},
     )
 
     try:
+        # Parse the text response
+        learnings = []
+        follow_up_questions = []
+        current_section = None
+
+        for line in response.strip().split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            if line == "LEARNINGS:":
+                current_section = "learnings"
+            elif line == "FOLLOW-UP QUESTIONS:":
+                current_section = "questions"
+            elif line.startswith('- '):
+                if current_section == "learnings":
+                    learnings.append(line[2:])
+                elif current_section == "questions":
+                    follow_up_questions.append(line[2:])
+
         return {
-            "learnings": response.get("learnings", [])[:num_learnings],
-            "followUpQuestions": response.get("followUpQuestions", [])[
-                :num_follow_up_questions
-            ],
+            "learnings": learnings[:num_learnings],
+            "followUpQuestions": follow_up_questions[:num_follow_up_questions],
         }
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
+    except Exception as e:
+        print(f"Error parsing response: {e}")
         print(f"Raw response: {response}")
         return {"learnings": [], "followUpQuestions": []}
 
@@ -123,62 +155,117 @@ async def write_final_report(
 
     user_prompt = (
         f"Given the following prompt from the user, write a final report on the topic using "
-        f"the learnings from research. Return a JSON object with a 'reportMarkdown' field "
-        f"containing a detailed markdown report (aim for 3+ pages). Include ALL the learnings "
-        f"from research:\n\n<prompt>{prompt}</prompt>\n\n"
+        f"the learnings from research. The report should be in plain text format with clear sections "
+        f"and bullet points where appropriate. Do not use markdown formatting. "
+        f"Make sure to include ALL the learnings from research and organize them logically:\n\n"
+        f"<prompt>{prompt}</prompt>\n\n"
         f"Here are all the learnings from research:\n\n<learnings>\n{learnings_string}\n</learnings>"
     )
 
-    response = await get_client_response(
-        client=client,
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": user_prompt},
-        ],
-        response_format={"type": "json_object"},
-    )
-
     try:
-        report = response.get("reportMarkdown", "")
+        response = await get_client_response(
+            client=client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "text"},
+        )
+
+        # Clean up the report
+        report = str(response).strip()
+        
+        if not report:
+            print("Warning: No report content found in response")
+            print("Raw response:", response)
+            report = "No report content was generated."
 
         # Append sources
-        urls_section = "\n\n## Sources\n\n" + "\n".join(
+        urls_section = "\n\nSources:\n" + "\n".join(
             [f"- {url}" for url in visited_urls]
         )
         return report + urls_section
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
-        print(f"Raw response: {response}")
-        return "Error generating report"
+
+    except Exception as e:
+        print(f"Error processing response: {e}")
+        print("Raw response:", response)
+        
+        # Try to extract any text content from the response
+        if isinstance(response, str):
+            # Clean up the response
+            cleaned_response = response.strip()
+            if cleaned_response:
+                return cleaned_response + "\n\nSources:\n" + "\n".join([f"- {url}" for url in visited_urls])
+        
+        return "Error generating report. Please try again with different parameters."
 
 
 async def deep_research(
-    query: str,
-    breadth: int,
-    depth: int,
-    concurrency: int,
-    client: openai.OpenAI,
-    model: str,
-    learnings: List[str] = None,
-    visited_urls: List[str] = None,
-) -> ResearchResult:
-    """
-    Main research function that recursively explores a topic.
+    prompt: str,
+    breadth: int = 4,
+    depth: int = 2,
+    concurrency: int = 3,
+    max_retries: int = 3,
+    retry_delay: int = 5,
+    client: Optional[openai.OpenAI] = None,
+    model: str = "gpt-4",
+) -> str:
+    """Perform deep research on a topic using AI and web search."""
 
-    Args:
-        query: Research query/topic
-        breadth: Number of parallel searches to perform
-        depth: How many levels deep to research
-        learnings: Previous learnings to build upon
-        visited_urls: Previously visited URLs
-    """
-    learnings = learnings or []
-    visited_urls = visited_urls or []
+    if not client:
+        client = openai.OpenAI()
+
+    learnings = []
+    visited_urls = []
+
+    async def research_deeper(query: str, current_depth: int) -> None:
+        """Recursively research deeper into a topic."""
+        if current_depth >= depth:
+            return
+
+        print(f"Researching deeper, breadth: {breadth}, current depth: {current_depth + 1} of {depth}")
+        
+        # Generate search queries
+        serp_queries = await generate_serp_queries(
+            query=query,
+            client=client,
+            model=model,
+        )
+
+        # Process queries with reduced breadth for deeper searches
+        reduced_breadth = max(1, breadth // 2)
+        async with asyncio.Semaphore(concurrency):
+            tasks = []
+            for q in serp_queries[:reduced_breadth]:
+                task = asyncio.create_task(
+                    process_query(
+                        query=q,
+                        client=client,
+                        model=model,
+                    )
+                )
+                tasks.append(task)
+            results = await asyncio.gather(*tasks)
+
+        # Process results
+        for result in results:
+            if result.learnings:
+                learnings.extend(result.learnings)
+            if result.visited_urls:
+                visited_urls.extend(result.visited_urls)
+
+        # Recursively research deeper
+        new_depth = current_depth + 1
+        if new_depth < depth:
+            for result in results:
+                if result.learnings:
+                    for learning in result.learnings:
+                        await research_deeper(learning, new_depth)
 
     # Generate search queries
     serp_queries = await generate_serp_queries(
-        query=query,
+        query=prompt,
         client=client,
         model=model,
         num_queries=breadth,
@@ -227,12 +314,12 @@ async def deep_research(
                     """.strip()
 
                     return await deep_research(
-                        query=next_query,
+                        prompt=next_query,
                         breadth=new_breadth,
                         depth=new_depth,
                         concurrency=concurrency,
-                        learnings=all_learnings,
-                        visited_urls=all_urls,
+                        max_retries=max_retries,
+                        retry_delay=retry_delay,
                         client=client,
                         model=model,
                     )
