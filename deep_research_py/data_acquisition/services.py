@@ -99,38 +99,65 @@ class SearchService:
         """
         await self.ensure_initialized()
 
+        logger.info(f"🔍 Starting search for query: '{query}' with limit={limit}")
+        logger.debug(f"Service type: {self.service_type}")
+
         try:
             if self.service_type == SearchServiceType.FIRECRAWL.value:
+                logger.debug("Using Firecrawl for search")
                 response = await self.firecrawl.search(query, limit=limit, **kwargs)
             else:
+                logger.debug("Using SearchAndScrapeManager for search and scrape")
                 scraped_data = await self.manager.search_and_scrape(
                     query, num_results=limit, scrape_all=True, **kwargs
                 )
 
                 # Format the response to match Firecrawl format
                 formatted_data = []
-                for result in scraped_data["search_results"]:
+                for i, result in enumerate(scraped_data["search_results"], 1):
                     item = {
                         "url": result.url,
                         "title": result.title,
                         "content": "",  # Default empty content
                     }
+                    
+                    logger.debug(f"Search result {i}: {result.url}")
+                    logger.debug(f"   Title: {result.title}")
 
                     # Add content if we scraped it
                     if result.url in scraped_data["scraped_contents"]:
                         scraped = scraped_data["scraped_contents"][result.url]
                         item["content"] = scraped.text
+                        content_length = len(scraped.text)
+                        logger.debug(f"   Content length: {content_length} characters")
+                        logger.debug(f"   Status code: {scraped.status_code}")
+                    else:
+                        logger.warning(f"   No scraped content available for: {result.url}")
 
                     formatted_data.append(item)
 
                 response = {"data": formatted_data}
+                
+                # Log final search results
+                logger.info(f"✅ Search completed: {len(formatted_data)} results")
+                urls_with_content = [item["url"] for item in formatted_data if item.get("content")]
+                urls_without_content = [item["url"] for item in formatted_data if not item.get("content")]
+                
+                logger.info(f"📄 URLs with content: {len(urls_with_content)}")
+                logger.info(f"❌ URLs without content: {len(urls_without_content)}")
+                
+                if urls_without_content:
+                    logger.warning("URLs that failed to scrape:")
+                    for url in urls_without_content:
+                        logger.warning(f"   ❌ {url}")
 
             if save_content:
+                logger.info(f"💾 Saving content to scraped_content/ directory")
                 # Create the directory if it doesn't exist
                 os.makedirs("scraped_content", exist_ok=True)
 
                 # Save each result as a separate JSON file
-                for item in response.get("data", []):
+                for i, item in enumerate(response.get("data", []), 1):
                     # Create a safe filename from the first 50 chars of the title
                     title = item.get("title", "untitled")
                     safe_filename = "".join(
@@ -138,16 +165,20 @@ class SearchService:
                     ).strip()
                     safe_filename = safe_filename.replace(" ", "_")
 
+                    filename = f"scraped_content/{safe_filename}_{i}.json"
                     # Save the content to a JSON file
-                    with open(
-                        f"scraped_content/{safe_filename}.json", "w", encoding="utf-8"
-                    ) as f:
+                    with open(filename, "w", encoding="utf-8") as f:
                         json.dump(item, f, ensure_ascii=False, indent=2)
+                    
+                    logger.debug(f"💾 Saved content to: {filename}")
+                    logger.debug(f"   URL: {item.get('url', 'No URL')}")
 
             return response
 
         except Exception as e:
-            logger.error(f"Error during search: {str(e)}")
+            logger.error(f"❌ Error during search: {str(e)}")
+            logger.error(f"   Query: {query}")
+            logger.error(f"   Service type: {self.service_type}")
             return {"data": []}
 
 
