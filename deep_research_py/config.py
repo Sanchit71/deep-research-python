@@ -8,12 +8,14 @@ from rich.console import Console
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_OLLAMA_MODEL = None
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 
 
 class ServiceProvider(Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     DEEPSEEK = "deepseek"
+    GEMINI = "gemini"
 
 
 @dataclass
@@ -77,6 +79,14 @@ class EnvironmentConfig:
             url_env_var="OLLAMA_HOST_ENDPOINT",
             default_model=DEFAULT_OLLAMA_MODEL,
             model_env_var="OLLAMA_MODEL",
+        ),
+        ServiceProvider.GEMINI.value: ProviderConfig(
+            service_provider_name=ServiceProvider.GEMINI.value,
+            api_key_env="GEMINI_API_KEY",
+            default_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            url_env_var="GEMINI_API_ENDPOINT",
+            default_model=DEFAULT_GEMINI_MODEL,
+            model_env_var="GEMINI_MODEL",
         ),
     }
 

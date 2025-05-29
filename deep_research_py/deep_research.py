@@ -2,7 +2,7 @@ from typing import List, Dict, TypedDict, Optional
 from dataclasses import dataclass
 import asyncio
 import openai
-from deep_research_py.data_acquisition.services import search_service
+from deep_research_py.data_acquisition.services import get_global_search_service
 from .ai.providers import trim_prompt, get_client_response
 from .prompt import system_prompt
 import json
@@ -37,23 +37,23 @@ async def generate_serp_queries(
     if learnings:
         prompt += f"\n\nHere are some learnings from previous research, use them to generate more specific queries: {' '.join(learnings)}"
 
-    response = await get_client_response(
-        client=client,
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": prompt},
-        ],
-        response_format={"type": "json_object"},
-    )
-
     try:
+        response = await get_client_response(
+            client=client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+
         queries = response.get("queries", [])
         return [SerpQuery(**q) for q in queries][:num_queries]
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
-        print(f"Raw response: {response}")
-        return []
+    except Exception as e:
+        print(f"Error generating SERP queries: {e}")
+        # Fallback to a simple query
+        return [SerpQuery(query=query, research_goal="General research")]
 
 
 async def process_serp_result(
@@ -84,26 +84,25 @@ async def process_serp_result(
         f"<contents>{contents_str}</contents>"
     )
 
-    response = await get_client_response(
-        client=client,
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": prompt},
-        ],
-        response_format={"type": "json_object"},
-    )
-
     try:
+        response = await get_client_response(
+            client=client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+
         return {
             "learnings": response.get("learnings", [])[:num_learnings],
             "followUpQuestions": response.get("followUpQuestions", [])[
                 :num_follow_up_questions
             ],
         }
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
-        print(f"Raw response: {response}")
+    except Exception as e:
+        print(f"Error processing SERP result: {e}")
         return {"learnings": [], "followUpQuestions": []}
 
 
@@ -129,17 +128,17 @@ async def write_final_report(
         f"Here are all the learnings from research:\n\n<learnings>\n{learnings_string}\n</learnings>"
     )
 
-    response = await get_client_response(
-        client=client,
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": user_prompt},
-        ],
-        response_format={"type": "json_object"},
-    )
-
     try:
+        response = await get_client_response(
+            client=client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+
         report = response.get("reportMarkdown", "")
 
         # Append sources
@@ -147,10 +146,21 @@ async def write_final_report(
             [f"- {url}" for url in visited_urls]
         )
         return report + urls_section
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
-        print(f"Raw response: {response}")
-        return "Error generating report"
+    except Exception as e:
+        print(f"Error generating final report: {e}")
+        # Fallback report
+        fallback_report = f"""# Research Report
+
+## Summary
+Research was conducted on: {prompt}
+
+## Key Findings
+""" + "\n".join([f"- {learning}" for learning in learnings[:10]])
+        
+        urls_section = "\n\n## Sources\n\n" + "\n".join(
+            [f"- {url}" for url in visited_urls]
+        )
+        return fallback_report + urls_section
 
 
 async def deep_research(
@@ -185,13 +195,16 @@ async def deep_research(
         learnings=learnings,
     )
 
-    # Create a semaphore to limit concurrent requests
-    semaphore = asyncio.Semaphore(concurrency)
+    # Create a semaphore to limit concurrent requests (reduce for Gemini)
+    # Gemini free tier has strict rate limits
+    api_semaphore = asyncio.Semaphore(1)  # Only 1 concurrent API call for Gemini
+    search_semaphore = asyncio.Semaphore(concurrency)
 
     async def process_query(serp_query: SerpQuery) -> ResearchResult:
-        async with semaphore:
+        async with search_semaphore:
             try:
                 # Search for content
+                search_service = get_global_search_service()
                 result = await search_service.search(serp_query.query, limit=5)
 
                 # Collect new URLs
@@ -203,14 +216,17 @@ async def deep_research(
                 new_breadth = max(1, breadth // 2)
                 new_depth = depth - 1
 
-                # Process the search results
-                new_learnings = await process_serp_result(
-                    query=serp_query.query,
-                    search_result=result,
-                    num_follow_up_questions=new_breadth,
-                    client=client,
-                    model=model,
-                )
+                # Process the search results with API rate limiting
+                async with api_semaphore:
+                    new_learnings = await process_serp_result(
+                        query=serp_query.query,
+                        search_result=result,
+                        num_follow_up_questions=new_breadth,
+                        client=client,
+                        model=model,
+                    )
+                    # Add a small delay between API calls
+                    await asyncio.sleep(1)
 
                 all_learnings = learnings + new_learnings["learnings"]
                 all_urls = visited_urls + new_urls

@@ -8,6 +8,7 @@ from rich.console import Console
 from dotenv import load_dotenv
 from .text_splitter import RecursiveCharacterTextSplitter
 from deep_research_py.config import EnvironmentConfig
+import asyncio
 
 load_dotenv()
 
@@ -56,17 +57,57 @@ class AIClientFactory:
 
 
 async def get_client_response(
-    client: AsyncOpenAI, model: str, messages: list, response_format: dict
+    client: AsyncOpenAI, model: str, messages: list, response_format: dict, max_retries: int = 3
 ):
-    response = await client.beta.chat.completions.parse(
-        model=model,
-        messages=messages,
-        response_format=response_format,
-    )
+    for attempt in range(max_retries):
+        try:
+            response = await client.beta.chat.completions.parse(
+                model=model,
+                messages=messages,
+                response_format=response_format,
+            )
 
-    result = response.choices[0].message.content
+            result = response.choices[0].message.content
+            
+            # Validate JSON before parsing
+            try:
+                return json.loads(result)
+            except json.JSONDecodeError as e:
+                print(f"JSON parsing error on attempt {attempt + 1}: {e}")
+                print(f"Raw response: {result[:500]}...")
+                
+                # Try to fix common JSON issues
+                if attempt < max_retries - 1:
+                    # Clean up the JSON string
+                    cleaned_result = result.strip()
+                    if not cleaned_result.endswith('}'):
+                        cleaned_result += '}'
+                    try:
+                        return json.loads(cleaned_result)
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    # Last attempt - return a fallback response
+                    if "reportMarkdown" in result:
+                        # Extract the markdown content manually
+                        start = result.find('"reportMarkdown": "') + len('"reportMarkdown": "')
+                        end = result.rfind('"')
+                        if start > 0 and end > start:
+                            markdown_content = result[start:end]
+                            return {"reportMarkdown": markdown_content}
+                    raise e
 
-    return json.loads(result)
+        except Exception as e:
+            if "429" in str(e) or "rate" in str(e).lower():
+                wait_time = 2 ** attempt  # Exponential backoff
+                print(f"Rate limit hit, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
+                await asyncio.sleep(wait_time)
+                if attempt == max_retries - 1:
+                    raise e
+            else:
+                raise e
+
+    return {"error": "Max retries exceeded"}
 
 
 MIN_CHUNK_SIZE = 140

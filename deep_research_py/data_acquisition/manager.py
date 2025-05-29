@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 from deep_research_py.utils import logger
 from .search import SearchResult, SearchEngine, DdgsSearchEngine
 from .scraper import ScrapedContent, Scraper, PlaywrightScraper
@@ -8,7 +8,8 @@ from .scraper import ScrapedContent, Scraper, PlaywrightScraper
 class SearchAndScrapeManager:
     """Main class for coordinating search and scrape operations."""
 
-    def __init__(self, search_engine: SearchEngine = None, scraper: Scraper = None):
+    def __init__(self, search_engine: Optional[SearchEngine] = None, scraper: Optional[Scraper] = None):
+        # Only use DdgsSearchEngine as fallback if no search engine is provided
         self.search_engine = search_engine or DdgsSearchEngine()
         self.scraper = scraper or PlaywrightScraper()
 

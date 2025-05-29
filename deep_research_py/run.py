@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
+import os
 
 from deep_research_py.deep_research import deep_research, write_final_report
 from deep_research_py.feedback import generate_feedback
@@ -38,6 +39,11 @@ async def main(
     ),
 ):
     """Deep Research CLI"""
+    
+    # Debug environment variables
+    console.print(f"[yellow]DEBUG: DEFAULT_SCRAPER = {os.getenv('DEFAULT_SCRAPER')}[/yellow]")
+    console.print(f"[yellow]DEBUG: SERPER_API_KEY = {'SET' if os.getenv('SERPER_API_KEY') else 'NOT SET'}[/yellow]")
+    
     console.print(
         Panel.fit(
             "[bold blue]Deep Research Assistant[/bold blue]\n"

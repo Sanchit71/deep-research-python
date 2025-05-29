@@ -175,3 +175,7 @@ cython_debug/
 # Output file and subjective test file
 output.md
 test.ipynb
+
+
+.deep_research_venv
+output.txt

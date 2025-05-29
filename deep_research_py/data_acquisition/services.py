@@ -6,6 +6,11 @@ import asyncio
 from deep_research_py.utils import logger
 from firecrawl import FirecrawlApp
 from .manager import SearchAndScrapeManager
+from .search import SerperSearchEngine
+from dotenv import load_dotenv
+
+# Ensure .env is loaded
+load_dotenv()
 
 
 class SearchServiceType(Enum):
@@ -13,6 +18,7 @@ class SearchServiceType(Enum):
 
     FIRECRAWL = "firecrawl"
     PLAYWRIGHT_DDGS = "playwright_ddgs"
+    PLAYWRIGHT_SERPER = "playwright_serper"
 
 
 class SearchResponse(TypedDict):
@@ -28,22 +34,47 @@ class SearchService:
         Args:
             service_type: The type of search service to use. Defaults to env var or playwright_ddgs.
         """
+        # Ensure .env is loaded before reading environment variables
+        load_dotenv()
+        
         # Determine which service to use
         if service_type is None:
             service_type = os.environ.get("DEFAULT_SCRAPER", "playwright_ddgs")
+            logger.info(f"DEFAULT_SCRAPER from env: {service_type}")
 
         self.service_type = service_type
 
+        # Add logging to confirm which service is being used
+        logger.info(f"Initializing search service with type: {self.service_type}")
+
         # Initialize the appropriate service
         if service_type == SearchServiceType.FIRECRAWL.value:
+            logger.info("Using Firecrawl for search and scraping")
             self.firecrawl = Firecrawl(
                 api_key=os.environ.get("FIRECRAWL_API_KEY", ""),
                 api_url=os.environ.get("FIRECRAWL_BASE_URL"),
             )
             self.manager = None
-        else:
+        elif service_type == SearchServiceType.PLAYWRIGHT_SERPER.value:
+            logger.info("Using Serper.dev for search with Playwright for scraping")
+            # Use Serper for search with Playwright for scraping
+            from .scraper import PlaywrightScraper
             self.firecrawl = None
-            self.manager = SearchAndScrapeManager()
+            self.manager = SearchAndScrapeManager(
+                search_engine=SerperSearchEngine(),
+                scraper=PlaywrightScraper()
+            )
+            self._initialized = False
+        else:
+            logger.info("Using DuckDuckGo for search with Playwright for scraping")
+            # Default to DDGS + Playwright
+            from .search import DdgsSearchEngine
+            from .scraper import PlaywrightScraper
+            self.firecrawl = None
+            self.manager = SearchAndScrapeManager(
+                search_engine=DdgsSearchEngine(),
+                scraper=PlaywrightScraper()
+            )
             # Initialize resources asynchronously later
             self._initialized = False
 
@@ -176,7 +207,22 @@ class Firecrawl:
             return {"data": []}
 
 
-# Initialize a global instance with the default settings
-search_service = SearchService(
-    service_type=os.getenv("DEFAULT_SCRAPER", "playwright_ddgs")
-)
+# Remove the global instance and create it dynamically
+def get_search_service():
+    """Get the search service instance based on environment configuration."""
+    # Ensure .env is loaded
+    load_dotenv()
+    service_type = os.getenv("DEFAULT_SCRAPER", "playwright_ddgs")
+    logger.info(f"Creating search service with type: {service_type}")
+    logger.info(f"All environment variables: DEFAULT_SCRAPER={os.getenv('DEFAULT_SCRAPER')}")
+    return SearchService(service_type=service_type)
+
+# Don't create global instance at import time - create it when needed
+search_service = None
+
+def get_global_search_service():
+    """Get or create the global search service instance."""
+    global search_service
+    if search_service is None:
+        search_service = get_search_service()
+    return search_service
