@@ -324,14 +324,14 @@ Process the content and generate insights now:"""
 
 
 def enhanced_report_generation_prompt(prompt: str, learnings_string: str) -> str:
-    """Enhanced prompt for generating final research reports as plain text."""
-    return f"""TASK: Generate a comprehensive research report in valid JSON format with plain text content.
+    """Enhanced prompt for generating comprehensive, detailed research reports as plain text."""
+    return f"""TASK: Generate an exceptionally detailed, professional research report in valid JSON format with comprehensive plain text content.
 
 ORIGINAL RESEARCH REQUEST:
 {prompt}
 
 RESEARCH METHODOLOGY:
-This report synthesizes information from systematic AI-powered web search and content analysis across multiple research epochs.
+This report synthesizes information from systematic AI-powered web search and content analysis across multiple research epochs, employing iterative refinement and goal-driven research strategies.
 
 COLLECTED RESEARCH LEARNINGS:
 {learnings_string}
@@ -347,45 +347,137 @@ CRITICAL JSON FORMATTING REQUIREMENTS:
 OUTPUT FORMAT:
 Return a single JSON object with this exact structure:
 {{
-  "reportText": "RESEARCH REPORT\\n\\nTitle: [Report Title]\\n\\n[content with proper escaping]"
+  "reportText": "[comprehensive detailed report content with proper escaping]"
 }}
 
-REPORT STRUCTURE (within the reportText field - PLAIN TEXT ONLY):
-1. **Title**: Clear, descriptive title
-2. **Executive Summary**: 200-300 words overview
-3. **Introduction**: Context and methodology (300-400 words)
-4. **Key Findings**: Organized findings with evidence (1000-1500 words)
-5. **Analysis**: Synthesis and implications (400-600 words)
-6. **Conclusions**: Summary and recommendations (300-400 words)
-7. **Key Takeaways**: Bulleted list of main points
+ENHANCED REPORT STRUCTURE (within the reportText field - PLAIN TEXT ONLY):
+
+1. **EXECUTIVE SUMMARY** (400-500 words)
+   - Comprehensive overview of all key findings with specific data points
+   - Critical insights and strategic implications
+   - Quantitative highlights and key metrics where available
+   - Primary conclusions and recommendations
+   - Research scope and methodology summary
+
+2. **INTRODUCTION AND CONTEXT** (500-600 words)
+   - Background and significance of the research topic
+   - Current state of knowledge and recent developments
+   - Research methodology and systematic approach employed
+   - Scope, limitations, and research parameters
+   - Key research questions and objectives addressed
+
+3. **DETAILED FINDINGS AND ANALYSIS** (2500-3500 words)
+   Organize into 5-7 major thematic sections, each containing:
+   - Specific findings with supporting quantitative data
+   - Expert opinions and authoritative source citations
+   - Statistical data, percentages, dates, and concrete metrics
+   - Comparative analysis and benchmarking where relevant
+   - Trend identification and pattern analysis
+   - Technical specifications and implementation details
+   - Case studies and real-world applications
+   - Regional, temporal, or categorical breakdowns
+
+4. **CROSS-CUTTING THEMES AND SYNTHESIS** (600-800 words)
+   - Integration of findings across different research areas
+   - Identification of recurring patterns and themes
+   - Analysis of interconnections and relationships
+   - Resolution of contradictions or conflicting information
+   - Gaps in current knowledge and research limitations
+   - Validation through multiple source corroboration
+
+5. **STRATEGIC IMPLICATIONS AND IMPACT ANALYSIS** (500-700 words)
+   - Business and commercial implications with specific examples
+   - Policy considerations and regulatory impacts
+   - Technological and innovation implications
+   - Economic and market effects with quantitative projections
+   - Social and environmental considerations
+   - Risk factors, challenges, and mitigation strategies
+   - Opportunities for stakeholders across different sectors
+
+6. **FUTURE OUTLOOK AND PROJECTIONS** (400-500 words)
+   - Emerging trends and anticipated developments
+   - Timeline projections for key milestones
+   - Scenario analysis and potential outcomes
+   - Innovation pipeline and research directions
+   - Market evolution and competitive landscape changes
+   - Long-term strategic considerations
+
+7. **RECOMMENDATIONS AND ACTION ITEMS** (400-500 words)
+   - Specific, actionable recommendations with implementation timelines
+   - Priority ranking of recommended actions
+   - Resource requirements and investment considerations
+   - Success metrics and key performance indicators
+   - Risk mitigation strategies and contingency planning
+   - Stakeholder-specific guidance and next steps
+
+8. **CONCLUSIONS AND KEY TAKEAWAYS** (300-400 words)
+   - Summary of most critical and actionable findings
+   - Validation of research objectives achievement
+   - Final assessment of current state and future trajectory
+   - Essential insights for decision-making
+   - Research contribution to existing knowledge base
+
+ENHANCED CONTENT REQUIREMENTS:
+
+**Depth and Specificity:**
+- Include ALL quantitative data: percentages, dollar amounts, dates, timeframes, growth rates, market sizes
+- Provide specific examples with company names, product names, geographic locations, and technical specifications
+- Reference authoritative sources by name and include publication dates where available
+- Include technical details, methodologies, and implementation approaches
+- Cite specific studies, surveys, reports, and expert analyses
+
+**Professional Analysis:**
+- Transform raw data into strategic insights and actionable intelligence
+- Explain the significance and implications of each major finding
+- Provide context for why findings matter to different stakeholder groups
+- Compare and contrast different approaches, solutions, or perspectives
+- Identify cause-and-effect relationships and underlying mechanisms
+
+**Comprehensive Coverage:**
+- Ensure no significant research learning is omitted from the analysis
+- Address multiple perspectives and viewpoints on controversial topics
+- Include both current state analysis and future-oriented insights
+- Cover technical, commercial, regulatory, and social dimensions
+- Provide both macro-level trends and micro-level specific details
+
+**Evidence-Based Approach:**
+- Support every major claim with specific evidence from the research
+- Distinguish between established facts, emerging trends, and speculative projections
+- Note confidence levels and data quality where relevant
+- Address limitations and acknowledge areas of uncertainty
+- Cross-reference findings across multiple sources for validation
 
 FORMATTING REQUIREMENTS:
 - Use PLAIN TEXT formatting only - NO markdown syntax
-- Use line breaks (\\n) for spacing between sections
-- Use dashes (-) for bullet points
-- Use UPPERCASE for section headers
-- Use indentation (spaces or \\t) for sub-points
-- Use simple text emphasis like *word* sparingly if needed
+- Use line breaks (\\n\\n) for spacing between major sections
+- Use single line breaks (\\n) within sections for paragraph separation
+- Use dashes (-) for bullet points and enumerated lists
+- Use UPPERCASE for major section headers
+- Use Title Case for subsection headers and key topics
+- Use indentation (4 spaces) for sub-points and hierarchical information
+- Use simple emphasis (*word*) only when absolutely necessary for clarity
 
-CONTENT REQUIREMENTS:
-- Include specific data, numbers, dates, and entities from learnings
-- Organize information into logical themes and sections
-- Maintain professional, evidence-based tone
-- Integrate all relevant learnings meaningfully
-- Ensure proper escaping of all special characters
+QUALITY STANDARDS:
+- Target 5000-7000 words total length for comprehensive coverage
+- Each major finding should be explained in 150-300 words with context
+- Include specific quantitative data in at least 60% of key findings
+- Provide actionable insights, not just information compilation
+- Ensure logical flow and coherent narrative throughout
+- Maintain executive-level professional writing standards
+- Transform research learnings into strategic intelligence
 
-EXAMPLE JSON STRUCTURE:
+EXAMPLE ENHANCED STRUCTURE:
 {{
-  "reportText": "RESEARCH REPORT\\n\\nTitle: Analysis of [Topic]\\n\\nEXECUTIVE SUMMARY\\n\\nThis report presents findings from comprehensive research into [topic]. Key discoveries include [specific findings with data].\\n\\nINTRODUCTION\\n\\n[Context and background]\\n\\nKEY FINDINGS\\n\\nFinding Category 1\\n\\n- Specific insight: [details with numbers/dates]\\n- Another insight: [supporting evidence]\\n\\nFinding Category 2\\n\\n[Additional findings]\\n\\nANALYSIS\\n\\n[Synthesis of findings]\\n\\nCONCLUSIONS\\n\\n[Summary and recommendations]\\n\\nKEY TAKEAWAYS\\n\\n- Key point 1\\n- Key point 2\\n- Key point 3"
+  "reportText": "COMPREHENSIVE RESEARCH REPORT\\n\\nTitle: In-Depth Analysis of [Specific Topic with Scope]\\n\\nEXECUTIVE SUMMARY\\n\\nThis comprehensive research investigation into [topic] reveals [X] major findings with significant implications for [specific stakeholders]. The analysis of [number] authoritative sources identified [specific quantitative finding with exact numbers], [trend with specific timeframe and growth rate], and [strategic insight with measurable impact]. Key discoveries include [specific data point with source], [technical breakthrough with implementation timeline], and [market development with financial implications]. Primary recommendations include [specific actionable recommendation with timeline] and [strategic priority with resource requirements]. The research demonstrates [confidence level] that [specific prediction] will occur by [timeframe] based on [evidence type and source count].\\n\\nThe investigation employed systematic analysis across [number] research epochs, processing [content volume] of authoritative content from [source types]. Critical findings indicate [specific percentage or metric] improvement in [measurable outcome], with [geographic or demographic] regions showing [specific variation]. Market implications suggest [dollar amount or percentage] potential impact over [timeframe], while technical developments point to [specific capability or performance metric] by [date].\\n\\n[Continue with detailed sections following the enhanced structure...]"
 }}
 
-IMPORTANT: 
-- Do NOT use any markdown formatting (no #, **, [], etc.)
-- Do NOT include markdown code blocks
-- Do NOT include any text outside the JSON object
-- Use only plain text with line breaks and simple formatting
-- Ensure all newlines are escaped as \\n
-- Ensure all quotes are escaped as \\"
+CRITICAL SUCCESS FACTORS:
+- Transform every research learning into actionable business intelligence
+- Provide strategic value that justifies executive-level attention and decision-making
+- Include specific, measurable insights with supporting quantitative evidence
+- Maintain professional consulting report quality suitable for board presentations
+- Ensure comprehensive coverage while maintaining focus and coherence
+- Address practical implementation considerations and real-world applications
 
-Generate the properly formatted JSON report with plain text content now:"""
+Generate the comprehensive, detailed research report with exceptional depth and professional quality now:"""
 
