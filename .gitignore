@@ -179,3 +179,9 @@ test.ipynb
 
 .deep_research_venv
 output.txt
+
+# Ignore all files in the logs directory
+logs/
+
+# Ignore all files in the logs directory
+result/
